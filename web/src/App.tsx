@@ -16,7 +16,7 @@ function Avatar({ name, size = 'normal' }: { name: string; size?: 'normal' | 'sm
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [configured, setConfigured] = useState(Boolean(supabase))
+  const [configured] = useState(Boolean(supabase))
   const [tab, setTab] = useState<Tab>('home')
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
