@@ -8,11 +8,14 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PersonAddAlt1
@@ -324,7 +327,7 @@ private fun ProfileScreen(
             HorizontalDivider()
             Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceAround) {
                 ProfileTabIcon(Icons.Outlined.GridOn, "Публикации", true)
-                ProfileTabIcon(Icons.Outlined.Lock, "Приватные", false)
+                ProfileTabIcon(Icons.Filled.Lock, "Приватные", false)
                 ProfileTabIcon(Icons.Outlined.Repeat, "Репосты", false)
                 ProfileTabIcon(Icons.Outlined.BookmarkBorder, "Избранное", false)
                 ProfileTabIcon(Icons.Outlined.FavoriteBorder, "Понравилось", false)
