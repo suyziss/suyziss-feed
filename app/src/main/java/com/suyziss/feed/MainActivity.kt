@@ -24,7 +24,6 @@ import androidx.compose.material.icons.outlined.GridOn
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PersonOutline
@@ -58,18 +57,25 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun SuyzissApp() {
-    var themeName by rememberSaveable { mutableStateOf(AppTheme.System.name) }
-    var selectedTab by rememberSaveable { mutableStateOf(Tab.Home.name) }
-    var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    var privateAccount by rememberSaveable { mutableStateOf(false) }
     val profileContext = LocalContext.current
     val profilePrefs = remember { profileContext.getSharedPreferences("suyziss_profile", android.content.Context.MODE_PRIVATE) }
+    var themeName by rememberSaveable { mutableStateOf(profilePrefs.getString("theme", AppTheme.System.name) ?: AppTheme.System.name) }
+    var selectedTab by rememberSaveable { mutableStateOf(Tab.Home.name) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var privateAccount by rememberSaveable { mutableStateOf(profilePrefs.getBoolean("private_account", false)) }
     var profileName by rememberSaveable { mutableStateOf(profilePrefs.getString("name", "SUYZISS") ?: "SUYZISS") }
     var profileUsername by rememberSaveable { mutableStateOf(profilePrefs.getString("username", "suyziss") ?: "suyziss") }
     var profileBio by rememberSaveable { mutableStateOf(profilePrefs.getString("bio", "") ?: "") }
     var profileAvatar by rememberSaveable { mutableStateOf(profilePrefs.getString("avatar", "") ?: "") }
-    LaunchedEffect(profileName, profileUsername, profileBio, profileAvatar) {
-        profilePrefs.edit().putString("name", profileName).putString("username", profileUsername).putString("bio", profileBio).putString("avatar", profileAvatar).apply()
+    LaunchedEffect(profileName, profileUsername, profileBio, profileAvatar, themeName, privateAccount) {
+        profilePrefs.edit()
+            .putString("name", profileName)
+            .putString("username", profileUsername)
+            .putString("bio", profileBio)
+            .putString("avatar", profileAvatar)
+            .putString("theme", themeName)
+            .putBoolean("private_account", privateAccount)
+            .apply()
     }
 
     val appTheme = AppTheme.valueOf(themeName)
@@ -279,6 +285,7 @@ private fun ProfileScreen(
     var user by remember(username) { mutableStateOf(username) }
     var description by remember(bio) { mutableStateOf(bio) }
     var avatar by remember(avatarUri) { mutableStateOf(avatarUri) }
+    var activeProfileTab by rememberSaveable { mutableStateOf(0) }
     val picker = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -289,19 +296,15 @@ private fun ProfileScreen(
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(54.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { editing = true }) { Icon(Icons.Outlined.Edit, "Редактировать профиль") }
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = {}) { Icon(Icons.Outlined.NotificationsNone, "Уведомления") }
-            IconButton(onClick = {}) { Icon(Icons.Outlined.PersonAddAlt1, "Добавить друзей") }
-            IconButton(onClick = onSettings) { Icon(Icons.Outlined.Menu, "Настройки") }
+            IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "Настройки") }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
             Spacer(Modifier.height(24.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(displayName.ifBlank { username }, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                        Icon(Icons.Default.ArrowDropDown, null)
+                        Text(displayName.ifBlank { username }, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                     }
                     Text("@$username", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(34.dp))
@@ -311,7 +314,7 @@ private fun ProfileScreen(
                         ProfileStat("0", "Лайки")
                     }
                 }
-                Box(Modifier.size(118.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(104.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { picker.launch(arrayOf("image/*")) }, contentAlignment = Alignment.Center) {
                     if (avatar.isNotBlank()) coil.compose.AsyncImage(model = avatar, contentDescription = "Аватар", modifier = Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                     else Icon(Icons.Outlined.CameraAlt, "Добавить аватар", tint = Color(0xFFFF315B), modifier = Modifier.size(52.dp))
                 }
@@ -326,13 +329,23 @@ private fun ProfileScreen(
             Spacer(Modifier.height(22.dp))
             HorizontalDivider()
             Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceAround) {
-                ProfileTabIcon(Icons.Outlined.GridOn, "Публикации", true)
-                ProfileTabIcon(Icons.Filled.Lock, "Приватные", false)
-                ProfileTabIcon(Icons.Outlined.Repeat, "Репосты", false)
-                ProfileTabIcon(Icons.Outlined.BookmarkBorder, "Избранное", false)
-                ProfileTabIcon(Icons.Outlined.FavoriteBorder, "Понравилось", false)
+                ProfileTabIcon(Icons.Outlined.GridOn, "Публикации", 0, activeProfileTab) { activeProfileTab = 0 }
+                ProfileTabIcon(Icons.Filled.Lock, "Приватные", 1, activeProfileTab) { activeProfileTab = 1 }
+                ProfileTabIcon(Icons.Outlined.Repeat, "Репосты", 2, activeProfileTab) { activeProfileTab = 2 }
+                ProfileTabIcon(Icons.Outlined.BookmarkBorder, "Избранное", 3, activeProfileTab) { activeProfileTab = 3 }
+                ProfileTabIcon(Icons.Outlined.FavoriteBorder, "Понравилось", 4, activeProfileTab) { activeProfileTab = 4 }
             }
-            Text("Публикаций пока нет", Modifier.align(Alignment.CenterHorizontally).padding(top = 22.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                when (activeProfileTab) {
+                    0 -> "Публикаций пока нет"
+                    1 -> "Приватных публикаций пока нет"
+                    2 -> "Репостов пока нет"
+                    3 -> "В избранном пока пусто"
+                    else -> "Понравившихся публикаций пока нет"
+                },
+                Modifier.align(Alignment.CenterHorizontally).padding(top = 22.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
     if (editing) AlertDialog(
@@ -357,8 +370,10 @@ private fun ProfileStat(value: String, label: String) {
 }
 
 @Composable
-private fun ProfileTabIcon(image: androidx.compose.ui.graphics.vector.ImageVector, description: String, selected: Boolean) {
-    Icon(image, contentDescription = description, tint = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(29.dp))
+private fun ProfileTabIcon(image: androidx.compose.ui.graphics.vector.ImageVector, description: String, index: Int, selectedIndex: Int, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(image, contentDescription = description, tint = if (selectedIndex == index) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(27.dp))
+    }
 }
 @Composable
 private fun SettingsScreen(
