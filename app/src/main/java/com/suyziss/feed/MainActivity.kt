@@ -396,7 +396,7 @@ private fun SettingsScreen(
         }
         HorizontalDivider()
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp).imePadding(),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp).imePadding().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Spacer(Modifier.height(16.dp))
