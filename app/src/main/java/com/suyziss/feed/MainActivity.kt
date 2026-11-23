@@ -13,6 +13,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.PersonAddAlt1
+import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.GridOn
+import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PersonOutline
@@ -50,6 +59,15 @@ private fun SuyzissApp() {
     var selectedTab by rememberSaveable { mutableStateOf(Tab.Home.name) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var privateAccount by rememberSaveable { mutableStateOf(false) }
+    val profileContext = LocalContext.current
+    val profilePrefs = remember { profileContext.getSharedPreferences("suyziss_profile", android.content.Context.MODE_PRIVATE) }
+    var profileName by rememberSaveable { mutableStateOf(profilePrefs.getString("name", "SUYZISS") ?: "SUYZISS") }
+    var profileUsername by rememberSaveable { mutableStateOf(profilePrefs.getString("username", "suyziss") ?: "suyziss") }
+    var profileBio by rememberSaveable { mutableStateOf(profilePrefs.getString("bio", "") ?: "") }
+    var profileAvatar by rememberSaveable { mutableStateOf(profilePrefs.getString("avatar", "") ?: "") }
+    LaunchedEffect(profileName, profileUsername, profileBio, profileAvatar) {
+        profilePrefs.edit().putString("name", profileName).putString("username", profileUsername).putString("bio", profileBio).putString("avatar", profileAvatar).apply()
+    }
 
     val appTheme = AppTheme.valueOf(themeName)
     val dark = when (appTheme) {
@@ -99,6 +117,11 @@ private fun SuyzissApp() {
                         Tab.Inbox -> InboxScreen()
                         Tab.Profile -> ProfileScreen(
                             privateAccount = privateAccount,
+                            displayName = profileName,
+                            username = profileUsername,
+                            bio = profileBio,
+                            avatarUri = profileAvatar,
+                            onProfileChange = { n, u, b, a -> profileName = n; profileUsername = u; profileBio = b; profileAvatar = a },
                             onSettings = { settingsOpen = true }
                         )
                     }
@@ -240,50 +263,102 @@ private fun InboxScreen() {
 }
 
 @Composable
-private fun ProfileScreen(privateAccount: Boolean, onSettings: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
-        ) {
-            IconButton(onClick = onSettings) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Настройки", modifier = Modifier.size(27.dp))
-            }
+private fun ProfileScreen(
+    privateAccount: Boolean,
+    displayName: String,
+    username: String,
+    bio: String,
+    avatarUri: String,
+    onProfileChange: (String, String, String, String) -> Unit,
+    onSettings: () -> Unit
+) {
+    val context = LocalContext.current
+    var editing by remember { mutableStateOf(false) }
+    var name by remember(displayName) { mutableStateOf(displayName) }
+    var user by remember(username) { mutableStateOf(username) }
+    var description by remember(bio) { mutableStateOf(bio) }
+    var avatar by remember(avatarUri) { mutableStateOf(avatarUri) }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }
+            avatar = uri.toString()
         }
-        Spacer(Modifier.height(42.dp))
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Surface(
-                    modifier = Modifier.size(92.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("S", fontSize = 38.sp, fontWeight = FontWeight.Light)
-                    }
-                }
-                Text("@suyziss", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                if (privateAccount) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("Закрытый аккаунт", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Text("Профиль SUYZISS FEED", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Spacer(Modifier.height(36.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
-        Spacer(Modifier.height(22.dp))
-        Text("Публикаций пока нет", modifier = Modifier.align(Alignment.CenterHorizontally), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Row(Modifier.fillMaxWidth().height(54.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { editing = true }) { Icon(Icons.Outlined.Edit, "Редактировать профиль") }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = {}) { Icon(Icons.Outlined.NotificationsNone, "Уведомления") }
+            IconButton(onClick = {}) { Icon(Icons.Outlined.PersonAddAlt1, "Добавить друзей") }
+            IconButton(onClick = onSettings) { Icon(Icons.Outlined.Menu, "Настройки") }
+        }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
+            Spacer(Modifier.height(24.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(displayName.ifBlank { username }, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        Icon(Icons.Default.ArrowDropDown, null)
+                    }
+                    Text("@$username", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(34.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                        ProfileStat("0", "Подписки")
+                        ProfileStat("0", "Подписчики")
+                        ProfileStat("0", "Лайки")
+                    }
+                }
+                Box(Modifier.size(118.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                    if (avatar.isNotBlank()) coil.compose.AsyncImage(model = avatar, contentDescription = "Аватар", modifier = Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                    else Icon(Icons.Outlined.CameraAlt, "Добавить аватар", tint = Color(0xFFFF315B), modifier = Modifier.size(52.dp))
+                }
+            }
+            Spacer(Modifier.height(25.dp))
+            Text(description.ifBlank { "Добавь описание профиля" }, fontSize = 18.sp, color = if (description.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+            if (privateAccount) Text("🔒 Закрытый аккаунт", modifier = Modifier.padding(top = 8.dp))
+            Spacer(Modifier.height(14.dp))
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(26.dp), modifier = Modifier.clickable { editing = true }) {
+                Text("Редактировать профиль", Modifier.padding(horizontal = 22.dp, vertical = 12.dp), fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(22.dp))
+            HorizontalDivider()
+            Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceAround) {
+                ProfileTabIcon(Icons.Outlined.GridOn, "Публикации", true)
+                ProfileTabIcon(Icons.Outlined.Lock, "Приватные", false)
+                ProfileTabIcon(Icons.Outlined.Repeat, "Репосты", false)
+                ProfileTabIcon(Icons.Outlined.BookmarkBorder, "Избранное", false)
+                ProfileTabIcon(Icons.Outlined.FavoriteBorder, "Понравилось", false)
+            }
+            Text("Публикаций пока нет", Modifier.align(Alignment.CenterHorizontally).padding(top = 22.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    if (editing) AlertDialog(
+        onDismissRequest = { editing = false },
+        title = { Text("Редактировать профиль") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(name, { name = it.take(30) }, label = { Text("Имя") }, singleLine = true)
+                OutlinedTextField(user, { v -> user = v.lowercase().filter { it.isLetterOrDigit() || it == '_' || it == '.' }.take(24) }, label = { Text("Username") }, prefix = { Text("@") }, singleLine = true)
+                OutlinedTextField(description, { description = it.take(50) }, label = { Text("Описание") }, supportingText = { Text("${description.length}/50") }, minLines = 2, maxLines = 3)
+                OutlinedButton(onClick = { picker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.CameraAlt, null); Spacer(Modifier.width(8.dp)); Text("Изменить аватар") }
+            }
+        },
+        confirmButton = { TextButton(enabled = user.isNotBlank(), onClick = { onProfileChange(name.trim(), user.trim(), description.trim(), avatar); editing = false }) { Text("Сохранить") } },
+        dismissButton = { TextButton(onClick = { editing = false }) { Text("Отмена") } }
+    )
 }
 
+@Composable
+private fun ProfileStat(value: String, label: String) {
+    Column { Text(value, fontSize = 26.sp, fontWeight = FontWeight.Bold); Text(label, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+}
+
+@Composable
+private fun ProfileTabIcon(image: androidx.compose.ui.graphics.vector.ImageVector, description: String, selected: Boolean) {
+    Icon(image, contentDescription = description, tint = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(29.dp))
+}
 @Composable
 private fun SettingsScreen(
     privateAccount: Boolean,
