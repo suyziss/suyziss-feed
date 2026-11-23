@@ -53,4 +53,4 @@ Open the repository's Actions tab to inspect the latest build and download its a
 
 ## Current project scope
 
-This is a client-side foundation. Feed content is currently sample/local data. Video playback, media selection and publishing, authentication, remote data, and the backend are not implemented yet.
+This is a client-side foundation. The feed and profile intentionally contain no fabricated posts or engagement data. Video playback, media selection and publishing, authentication, remote data, and the backend are not implemented yet.
