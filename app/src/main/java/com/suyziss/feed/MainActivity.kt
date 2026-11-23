@@ -168,11 +168,9 @@ private fun BottomNavigationBar(selected: Tab, onSelect: (Tab) -> Unit) {
                     modifier = Modifier.size(width = 62.dp, height = 48.dp).clickable { onSelect(Tab.Create) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(Modifier.offset(x = (-3).dp).size(48.dp, 38.dp).clip(RoundedCornerShape(13.dp)).background(Color(0xFF00D5E8)))
-                    Box(Modifier.offset(x = 3.dp).size(48.dp, 38.dp).clip(RoundedCornerShape(13.dp)).background(Color(0xFFFF315B)))
                     Surface(
-                        color = Color.White,
-                        contentColor = Color.Black,
+                        color = if (MaterialTheme.colorScheme.background == Color(0xFF09090B)) Color.Black else Color(0xFFF0EFEC),
+                        contentColor = Color.White,
                         shape = RoundedCornerShape(13.dp),
                         modifier = Modifier.size(48.dp, 38.dp)
                     ) {
