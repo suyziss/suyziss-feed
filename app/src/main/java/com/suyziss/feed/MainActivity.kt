@@ -1,35 +1,39 @@
 package com.suyziss.feed
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
-private enum class Tab(val label: String) { Home("Home"), Explore("Explore"), Create("Create"), Inbox("Inbox"), Profile("Profile") }
-private data class Post(val user: String, val caption: String, val category: String, val colors: List<Color>, val likes: String, val comments: String)
-private val samplePosts = listOf(
-    Post("suyziss", "A quiet moment in the city. 夜", "JAPAN / NIGHT", listOf(Color(0xFF11151C), Color(0xFF394653), Color(0xFF101115)), "12.8K", "284"),
-    Post("narei.kaoru", "Somewhere between the lights.", "CITY / LIFE", listOf(Color(0xFF201A2D), Color(0xFF67516F), Color(0xFF17141D)), "8,421", "109"),
-    Post("akivass", "Less noise. More focus.", "MINIMAL", listOf(Color(0xFF152B2C), Color(0xFF456A67), Color(0xFF101A1B)), "5,092", "76"),
-    Post("kelzuma", "The world after midnight.", "ATMOSPHERE", listOf(Color(0xFF30241F), Color(0xFF765343), Color(0xFF171311)), "3,810", "51")
-)
+private enum class Tab { Home, Friends, Create, Inbox, Profile }
+private enum class AppTheme { System, Light, Dark }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,118 +45,343 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun SuyzissApp() {
-    var dark by rememberSaveable { mutableStateOf(true) }
-    val colors = if (dark) darkColorScheme() else lightColorScheme()
-    MaterialTheme(colorScheme = colors) {
-        var selected by rememberSaveable { mutableStateOf(Tab.Home) }
+    var themeName by rememberSaveable { mutableStateOf(AppTheme.System.name) }
+    var selectedTab by rememberSaveable { mutableStateOf(Tab.Home.name) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var privateAccount by rememberSaveable { mutableStateOf(false) }
+
+    val appTheme = AppTheme.valueOf(themeName)
+    val dark = when (appTheme) {
+        AppTheme.System -> isSystemInDarkTheme()
+        AppTheme.Light -> false
+        AppTheme.Dark -> true
+    }
+    val scheme = if (dark) darkColorScheme(
+        background = Color(0xFF09090B),
+        surface = Color(0xFF141417),
+        primary = Color(0xFFFFFFFF)
+    ) else lightColorScheme()
+
+    MaterialTheme(colorScheme = scheme) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                NavigationBar {
-                    Tab.entries.forEach { tab ->
-                        val icon = when (tab) {
-                            Tab.Home -> Icons.Default.Home
-                            Tab.Explore -> Icons.Default.Search
-                            Tab.Create -> Icons.Default.AddBox
-                            Tab.Inbox -> Icons.Default.Inbox
-                            Tab.Profile -> Icons.Default.Person
+                if (!settingsOpen) {
+                    BottomNavigationBar(
+                        selected = Tab.valueOf(selectedTab),
+                        onSelect = {
+                            selectedTab = it.name
+                            settingsOpen = false
                         }
-                        NavigationBarItem(
-                            selected = selected == tab,
-                            onClick = { selected = tab },
-                            icon = { Icon(icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
-                            alwaysShowLabel = false
+                    )
+                }
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                if (settingsOpen) {
+                    SettingsScreen(
+                        privateAccount = privateAccount,
+                        onPrivateAccountChange = { privateAccount = it },
+                        theme = appTheme,
+                        onThemeChange = { themeName = it.name },
+                        onBack = { settingsOpen = false }
+                    )
+                } else {
+                    when (Tab.valueOf(selectedTab)) {
+                        Tab.Home -> EmptyFeedScreen()
+                        Tab.Friends -> FriendsScreen()
+                        Tab.Create -> CreateScreen()
+                        Tab.Inbox -> InboxScreen()
+                        Tab.Profile -> ProfileScreen(
+                            privateAccount = privateAccount,
+                            onSettings = { settingsOpen = true }
                         )
                     }
                 }
             }
-        ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
-                when (selected) {
-                    Tab.Home -> FeedScreen()
-                    Tab.Explore -> ExploreScreen()
-                    Tab.Create -> SimpleScreen("Create publication", "Video and photo publishing will be implemented next.")
-                    Tab.Inbox -> SimpleScreen("Messages", "Your conversations will appear here.")
-                    Tab.Profile -> ProfileScreen(dark = dark, onThemeChange = { dark = it })
+        }
+    }
+}
+
+@Composable
+private fun BottomNavigationBar(selected: Tab, onSelect: (Tab) -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            color = Color(0xFF050506),
+            contentColor = Color.White,
+            shape = RoundedCornerShape(40.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(66.dp),
+            shadowElevation = 10.dp
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                BottomNavItem(
+                    selected = selected == Tab.Home,
+                    onClick = { onSelect(Tab.Home) },
+                    icon = { Icon(Icons.Outlined.Home, contentDescription = "Главная", modifier = Modifier.size(27.dp)) }
+                )
+                BottomNavItem(
+                    selected = selected == Tab.Friends,
+                    onClick = { onSelect(Tab.Friends) },
+                    icon = { Icon(Icons.Outlined.Group, contentDescription = "Друзья", modifier = Modifier.size(29.dp)) }
+                )
+                Box(
+                    modifier = Modifier.size(width = 62.dp, height = 48.dp).clickable { onSelect(Tab.Create) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.offset(x = (-3).dp).size(48.dp, 38.dp).clip(RoundedCornerShape(13.dp)).background(Color(0xFF00D5E8)))
+                    Box(Modifier.offset(x = 3.dp).size(48.dp, 38.dp).clip(RoundedCornerShape(13.dp)).background(Color(0xFFFF315B)))
+                    Surface(
+                        color = Color.White,
+                        contentColor = Color.Black,
+                        shape = RoundedCornerShape(13.dp),
+                        modifier = Modifier.size(48.dp, 38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Add, contentDescription = "Создать", modifier = Modifier.size(30.dp))
+                        }
+                    }
+                }
+                BottomNavItem(
+                    selected = selected == Tab.Inbox,
+                    onClick = { onSelect(Tab.Inbox) },
+                    icon = {
+                        Box {
+                            Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = "Сообщения", modifier = Modifier.size(28.dp))
+                            if (selected != Tab.Inbox) {
+                                Box(
+                                    Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-3).dp)
+                                        .size(8.dp).clip(CircleShape).background(Color(0xFF168BFF))
+                                )
+                            }
+                        }
+                    }
+                )
+                BottomNavItem(
+                    selected = selected == Tab.Profile,
+                    onClick = { onSelect(Tab.Profile) },
+                    icon = { Icon(Icons.Outlined.PersonOutline, contentDescription = "Профиль", modifier = Modifier.size(29.dp)) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomNavItem(selected: Boolean, onClick: () -> Unit, icon: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier.size(width = 60.dp, height = 54.dp)
+            .clip(RoundedCornerShape(30.dp))
+            .background(if (selected) Color(0xFF303034) else Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        CompositionLocalProvider(LocalContentColor provides Color.White) { icon() }
+    }
+}
+
+@Composable
+private fun EmptyFeedScreen() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 34.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("suyziss.", fontSize = 34.sp, fontWeight = FontWeight.Light, letterSpacing = (-1).sp)
+        Spacer(Modifier.height(12.dp))
+        Text("Пока здесь пусто", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Публикации появятся здесь, когда авторы начнут делиться контентом.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+private fun FriendsScreen() {
+    EmptyState(
+        title = "Друзья",
+        message = "Здесь будут публикации людей, на которых ты подписан."
+    )
+}
+
+@Composable
+private fun CreateScreen() {
+    EmptyState(
+        title = "Создать публикацию",
+        message = "Добавление фото и видео появится в следующем этапе разработки."
+    )
+}
+
+@Composable
+private fun InboxScreen() {
+    EmptyState(
+        title = "Входящие",
+        message = "Когда появятся новые сообщения, они будут отображаться здесь."
+    )
+}
+
+@Composable
+private fun ProfileScreen(privateAccount: Boolean, onSettings: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = onSettings) {
+                Icon(Icons.Outlined.Settings, contentDescription = "Настройки", modifier = Modifier.size(27.dp))
+            }
+        }
+        Spacer(Modifier.height(42.dp))
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Surface(
+                    modifier = Modifier.size(92.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("S", fontSize = 38.sp, fontWeight = FontWeight.Light)
+                    }
+                }
+                Text("@suyziss", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                if (privateAccount) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Закрытый аккаунт", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Text("Профиль SUYZISS FEED", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(36.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
+        Spacer(Modifier.height(22.dp))
+        Text("Публикаций пока нет", modifier = Modifier.align(Alignment.CenterHorizontally), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    privateAccount: Boolean,
+    onPrivateAccountChange: (Boolean) -> Unit,
+    theme: AppTheme,
+    onThemeChange: (AppTheme) -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier.fillMaxSize().statusBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBack) { Text("Назад") }
+            Text("Настройки и конфиденциальность", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        }
+        HorizontalDivider()
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp).imePadding(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Spacer(Modifier.height(16.dp))
+            SettingsSectionTitle("КОНФИДЕНЦИАЛЬНОСТЬ")
+            ListItem(
+                headlineContent = { Text("Закрытый аккаунт") },
+                supportingContent = { Text("Только одобренные подписчики смогут видеть твои публикации.") },
+                leadingContent = { Icon(Icons.Default.Lock, contentDescription = null) },
+                trailingContent = {
+                    Switch(checked = privateAccount, onCheckedChange = onPrivateAccountChange)
+                }
+            )
+            Spacer(Modifier.height(18.dp))
+            SettingsSectionTitle("ОФОРМЛЕНИЕ")
+            Text("Тема приложения", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 6.dp))
+            AppTheme.entries.forEach { option ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .clickable { onThemeChange(option) }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(selected = theme == option, onClick = { onThemeChange(option) })
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        when (option) {
+                            AppTheme.System -> "Системная"
+                            AppTheme.Light -> "Светлая"
+                            AppTheme.Dark -> "Тёмная"
+                        }
+                    )
                 }
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FeedScreen() {
-    val pager = rememberPagerState(pageCount = { samplePosts.size })
-    val liked = remember { mutableStateMapOf<Int, Boolean>() }
-    VerticalPager(state = pager, modifier = Modifier.fillMaxSize()) { index ->
-        val post = samplePosts[index]
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(post.colors))) {
-            Column(
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(post.category, color = Color.White.copy(alpha = .62f), fontSize = 10.sp, letterSpacing = 3.sp)
-                Text("suyziss.", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Light, letterSpacing = (-2).sp)
-                Text(post.caption, color = Color.White.copy(alpha = .9f), fontSize = 15.sp)
-                Icon(Icons.Default.PlayArrow, contentDescription = "Video placeholder", tint = Color.White.copy(alpha = .7f), modifier = Modifier.size(34.dp))
-            }
-            Text("FOR YOU     FOLLOWING", color = Color.White.copy(alpha = .85f), fontSize = 11.sp, letterSpacing = 1.5.sp, modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp))
-            Column(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 26.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                IconButton(onClick = { liked[index] = !(liked[index] ?: false) }) {
-                    Icon(if (liked[index] == true) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = "Like", tint = if (liked[index] == true) Color(0xFFFF526B) else Color.White)
-                }
-                Text(post.likes, color = Color.White, fontSize = 11.sp)
-                IconButton(onClick = {}) { Icon(Icons.Default.ChatBubbleOutline, contentDescription = "Comments", tint = Color.White) }
-                Text(post.comments, color = Color.White, fontSize = 11.sp)
-                IconButton(onClick = {}) { Icon(Icons.Default.Send, contentDescription = "Share", tint = Color.White) }
-                IconButton(onClick = {}) { Icon(Icons.Default.MoreHoriz, contentDescription = "More", tint = Color.White) }
-            }
-            Column(Modifier.align(Alignment.BottomStart).padding(start = 18.dp, end = 76.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("@${post.user}", color = Color.White, fontWeight = FontWeight.SemiBold)
-                Text(post.caption, color = Color.White.copy(alpha = .82f), fontSize = 12.sp)
-            }
+            Spacer(Modifier.height(18.dp))
+            SettingsSectionTitle("ПОДДЕРЖКА")
+            ListItem(
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/suyziss"))
+                    context.startActivity(intent)
+                },
+                headlineContent = { Text("Поддержка и обратная связь") },
+                supportingContent = { Text("@suyziss") },
+                leadingContent = { Icon(Icons.Default.SupportAgent, contentDescription = null) },
+                trailingContent = { Text("↗", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "SUYZISS FEED · Настройки",
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 18.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
 }
 
 @Composable
-private fun ExploreScreen() {
-    var query by rememberSaveable { mutableStateOf("") }
-    val topics = listOf("Night city", "Design", "Japan", "Photography", "Minimalism", "Music", "Cars", "Travel")
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Explore", style = MaterialTheme.typography.headlineMedium)
-        OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Search SUYZISS FEED") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
-        topics.filter { it.contains(query, ignoreCase = true) }.forEach { topic ->
-            ListItem(headlineContent = { Text(topic) }, leadingContent = { Icon(Icons.Default.Tag, null) })
-        }
-    }
+private fun SettingsSectionTitle(title: String) {
+    Text(
+        title,
+        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.labelMedium,
+        letterSpacing = 1.2.sp,
+        fontWeight = FontWeight.SemiBold
+    )
 }
 
 @Composable
-private fun ProfileScreen(dark: Boolean, onThemeChange: (Boolean) -> Unit) {
-    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Profile", style = MaterialTheme.typography.headlineMedium)
-        Text("@suyziss", style = MaterialTheme.typography.titleLarge)
-        Text("Building a quieter corner of the internet.")
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = { onThemeChange(true) }) { Icon(Icons.Default.DarkMode, null); Text(" Dark") }
-            OutlinedButton(onClick = { onThemeChange(false) }) { Icon(Icons.Default.LightMode, null); Text(" Light") }
-        }
-        TextButton(onClick = { onThemeChange(!dark) }) { Text("Switch theme") }
-    }
-}
-
-@Composable
-private fun SimpleScreen(title: String, subtitle: String) {
-    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(title, style = MaterialTheme.typography.headlineMedium)
-        Text(subtitle, modifier = Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun EmptyState(title: String, message: String) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(title, style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(10.dp))
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
