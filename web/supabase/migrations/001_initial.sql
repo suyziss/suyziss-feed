@@ -63,13 +63,17 @@ alter table public.follows enable row level security;
 alter table public.posts enable row level security;
 alter table public.likes enable row level security;
 
-create policy "profiles visible by privacy rules" on public.profiles for select using (public.can_view_profile(id));
+-- Basic profile fields are discoverable; private-account content remains protected by post RLS.
+create policy "profiles are discoverable" on public.profiles for select using (true);
 create policy "profile owner inserts" on public.profiles for insert with check (id = auth.uid());
 create policy "profile owner updates" on public.profiles for update using (id = auth.uid()) with check (id = auth.uid());
 
 create policy "follow rows visible to participants" on public.follows for select using (follower_id = auth.uid() or following_id = auth.uid());
-create policy "users request follows" on public.follows for insert with check (follower_id = auth.uid());
-create policy "recipient or follower updates follow" on public.follows for update using (follower_id = auth.uid() or following_id = auth.uid()) with check (follower_id = auth.uid() or following_id = auth.uid());
+create policy "users request follows" on public.follows for insert with check (
+  follower_id = auth.uid() and follower_id <> following_id
+  and (status = 'pending' or exists (select 1 from public.profiles p where p.id = following_id and not p.is_private))
+);
+create policy "recipient approves follow requests" on public.follows for update using (following_id = auth.uid()) with check (following_id = auth.uid());
 create policy "participants delete follows" on public.follows for delete using (follower_id = auth.uid() or following_id = auth.uid());
 
 create policy "posts visible by privacy rules" on public.posts for select using (public.can_view_post(author_id));
